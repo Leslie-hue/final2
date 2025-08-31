@@ -469,7 +469,7 @@
                         <select id="filter_month" class="filter-select" onchange="filterSlots()">
                             <option value="">Tous</option>
                             <?php for ($m = 1; $m <= 12; $m++): ?>
-                                <option value="<?php echo sprintf('%02d', $m); ?>"><?php echo date('F', mktime(0,0,0,$m,1)); ?></option>
+                                <option value="<?php echo sprintf('%02d', $m); ?>" <?php echo $m == date('n') ? 'selected' : ''; ?>><?php echo strftime('%B', mktime(0,0,0,$m,1)); ?></option>
                             <?php endfor; ?>
                         </select>
                     </div>
@@ -493,9 +493,20 @@
                             <option value="booked">Réservé</option>
                         </select>
                     </div>
+                    <div class="filter-group">
+                        <label class="filter-label" for="filter_time">Heure</label>
+                        <select id="filter_time" class="filter-select" onchange="filterSlots()">
+                            <option value="">Toutes les heures</option>
+                            <option value="morning">Matin (9h-12h)</option>
+                            <option value="afternoon">Après-midi (14h-18h)</option>
+                        </select>
+                    </div>
                     <div style="display: flex; align-items: end; gap: 1rem;">
                         <button onclick="resetFilters()" class="btn btn-secondary">
                             <i class="fas fa-undo"></i> Réinitialiser
+                        </button>
+                        <button onclick="exportSlots()" class="btn btn-primary">
+                            <i class="fas fa-download"></i> Exporter
                         </button>
                     </div>
                 </div>
@@ -506,15 +517,20 @@
                         <?php foreach ($slots as $slot): ?>
                             <?php 
                                 $startDate = new DateTime($slot['start_time']);
+                                $endDate = new DateTime($slot['end_time']);
                                 $status = $slot['is_booked'] ? 'booked' : 'available';
+                                $hour = $startDate->format('H');
+                                $timeCategory = ($hour >= 9 && $hour < 12) ? 'morning' : 'afternoon';
                             ?>
                             <li class="slot-item" 
                                 data-month="<?php echo $startDate->format('m'); ?>" 
                                 data-year="<?php echo $startDate->format('Y'); ?>" 
                                 data-date="<?php echo $startDate->format('Y-m-d'); ?>" 
-                                data-status="<?php echo $status; ?>">
+                                data-status="<?php echo $status; ?>"
+                                data-time="<?php echo $timeCategory; ?>"
+                                data-hour="<?php echo $hour; ?>">
                                 <div class="slot-info">
-                                    <h4><?php echo $startDate->format('d/m/Y H:i'); ?> - <?php echo (new DateTime($slot['end_time']))->format('H:i'); ?></h4>
+                                    <h4><?php echo $startDate->format('d/m/Y H:i'); ?> - <?php echo $endDate->format('H:i'); ?></h4>
                                     <?php if ($slot['is_booked']): ?>
                                         <p>Réservé par : <?php echo htmlspecialchars($slot['contact_name'] ?? 'Inconnu'); ?> (<?php echo htmlspecialchars($slot['contact_email'] ?? ''); ?>)</p>
                                         <p>Statut : <span class="status-badge status-<?php echo $slot['appointment_status']; ?>"><?php echo ucfirst($slot['appointment_status']); ?></span></p>
@@ -523,6 +539,9 @@
                                     <?php endif; ?>
                                 </div>
                                 <div>
+                                    <span class="status-badge status-<?php echo $status; ?>">
+                                        <?php echo $status === 'available' ? 'Disponible' : 'Réservé'; ?>
+                                    </span>
                                     <?php if (!$slot['is_booked']): ?>
                                         <form action="/admin/schedule" method="POST" style="display: inline;">
                                             <input type="hidden" name="action" value="delete_slot">
@@ -565,17 +584,20 @@
             const year = document.getElementById('filter_year').value;
             const date = document.getElementById('filter_date').value;
             const status = document.getElementById('filter_status').value;
+            const time = document.getElementById('filter_time').value;
 
             let filteredSlots = originalSlots.filter(slot => {
                 const slotMonth = slot.dataset.month;
                 const slotYear = slot.dataset.year;
                 const slotDate = slot.dataset.date;
                 const slotStatus = slot.dataset.status;
+                const slotTime = slot.dataset.time;
 
                 if (month && slotMonth !== month) return false;
                 if (year && slotYear !== year) return false;
                 if (date && slotDate !== date) return false;
                 if (status && slotStatus !== status) return false;
+                if (time && slotTime !== time) return false;
                 return true;
             });
 
@@ -611,7 +633,49 @@
             document.getElementById('filter_year').value = '<?php echo date('Y'); ?>';
             document.getElementById('filter_date').value = '';
             document.getElementById('filter_status').value = '';
+            document.getElementById('filter_time').value = '';
             filterSlots();
+        }
+
+        function exportSlots() {
+            const filteredSlots = Array.from(document.querySelectorAll('.slot-item')).filter(slot => 
+                slot.style.display !== 'none'
+            );
+            
+            let csvContent = "Date,Heure Début,Heure Fin,Statut,Client,Email\n";
+            
+            filteredSlots.forEach(slot => {
+                const date = slot.dataset.date;
+                const timeText = slot.querySelector('h4').textContent;
+                const times = timeText.split(' - ');
+                const startTime = times[0].split(' ')[1];
+                const endTime = times[1];
+                const status = slot.dataset.status === 'available' ? 'Disponible' : 'Réservé';
+                const clientInfo = slot.querySelector('.slot-info p');
+                let client = '';
+                let email = '';
+                
+                if (status === 'Réservé' && clientInfo) {
+                    const text = clientInfo.textContent;
+                    const match = text.match(/Réservé par : (.+) \((.+)\)/);
+                    if (match) {
+                        client = match[1];
+                        email = match[2];
+                    }
+                }
+                
+                csvContent += `"${date}","${startTime}","${endTime}","${status}","${client}","${email}"\n`;
+            });
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `planning_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         document.addEventListener('DOMContentLoaded', () => {

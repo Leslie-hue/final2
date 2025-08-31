@@ -406,27 +406,22 @@ class FileUploadManager {
     }
 
     initializeAppointmentToggle() {
-        const appointmentToggle = document.getElementById('appointmentToggle');
         const appointmentDetails = document.getElementById('appointmentDetails');
         const appointmentRequested = document.getElementById('appointmentRequested');
-        if (appointmentToggle && appointmentDetails && appointmentRequested) {
-            appointmentToggle.addEventListener('click', () => {
-                const isActive = appointmentToggle.querySelector('.toggle-slider').classList.toggle('active');
-                appointmentRequested.value = isActive ? '1' : '0';
-                appointmentDetails.style.display = isActive ? 'block' : 'none';
-                document.getElementById('appointment_date').required = isActive;
-                document.getElementById('slot_id').required = isActive;
-                document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
-                    radio.required = isActive;
-                    if (!isActive) radio.checked = false;
-                });
-                document.getElementById('stripeSection').style.display = 'none';
-                document.getElementById('slot_id').disabled = isActive && !document.getElementById('appointment_date').value;
-                this.updateSubmitButton();
-                if (isActive && document.getElementById('appointment_date').value) {
-                    document.getElementById('appointment_date').dispatchEvent(new Event('change'));
-                }
-            });
+        
+        // Rendez-vous obligatoire - toujours activé
+        if (appointmentDetails && appointmentRequested) {
+            appointmentRequested.value = '1';
+            appointmentDetails.style.display = 'block';
+            document.getElementById('appointment_date').required = true;
+            document.getElementById('slot_id').required = true;
+            
+            // Sélectionner automatiquement le paiement sur place
+            const onsitePayment = document.getElementById('paymentOnsite');
+            if (onsitePayment) {
+                onsitePayment.checked = true;
+                onsitePayment.closest('.payment-option').classList.add('selected');
+            }
 
             const dateInput = document.getElementById('appointment_date');
             const slotSelect = document.getElementById('slot_id');
@@ -451,7 +446,7 @@ class FileUploadManager {
                     slotSelect.innerHTML = '<option value="">Chargement des créneaux...</option>';
 
                     try {
-                        const response = await fetch(`/contact/slots?date=${encodeURIComponent(selectedDate)}`, {
+                        const response = await fetch(`/api/appointment-slots?date=${encodeURIComponent(selectedDate)}`, {
                             method: 'GET',
                             headers: { 'Accept': 'application/json' }
                         });
@@ -482,14 +477,13 @@ class FileUploadManager {
     }
 
     initializePaymentOptions() {
-        document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
-            radio.addEventListener('change', () => {
-                document.querySelectorAll('.payment-option').forEach(option => option.classList.remove('selected'));
-                radio.closest('.payment-option').classList.add('selected');
-                document.getElementById('stripeSection').style.display = radio.value === 'online' ? 'block' : 'none';
-                this.updateSubmitButton();
-            });
-        });
+        // Seul le paiement sur place est disponible
+        const onsitePayment = document.getElementById('paymentOnsite');
+        if (onsitePayment) {
+            onsitePayment.checked = true;
+            onsitePayment.closest('.payment-option').classList.add('selected');
+        }
+        this.updateSubmitButton();
     }
 
     isFormValid() {
@@ -497,31 +491,26 @@ class FileUploadManager {
         const name = document.getElementById('name')?.value.trim();
         const email = document.getElementById('email')?.value.trim();
         const message = document.getElementById('message')?.value.trim();
-        const appointmentRequested = document.getElementById('appointmentRequested')?.value === '1';
         const appointmentDate = document.getElementById('appointment_date')?.value;
         const slotId = document.getElementById('slot_id')?.value;
         const paymentMethod = document.querySelector('input[name="payment_method"]:checked');
 
-        if (!name || !email || !message) return false;
-        if (appointmentRequested && (!appointmentDate || !slotId || !paymentMethod)) return false;
+        // Tous les champs sont obligatoires maintenant
+        if (!name || !email || !message || !appointmentDate || !slotId || !paymentMethod) return false;
         return true;
     }
 
     updateSubmitButton() {
         const submitBtn = document.getElementById('submitBtn');
-        const isAppointment = document.getElementById('appointmentRequested')?.value === '1';
         const paymentMethod = document.querySelector('input[name="payment_method"]:checked');
         submitBtn.disabled = !this.isFormValid();
 
-        if (!isAppointment) {
-            submitBtn.querySelector('#submitText').textContent = 'Envoyer la demande';
-            submitBtn.querySelector('i').className = 'fas fa-paper-plane';
-        } else if (paymentMethod) {
-            submitBtn.querySelector('#submitText').textContent = paymentMethod.value === 'online' ? 'Payer et Réserver (150€)' : 'Demander un rendez-vous';
-            submitBtn.querySelector('i').className = paymentMethod.value === 'online' ? 'fas fa-credit-card' : 'fas fa-calendar-alt';
+        if (paymentMethod && paymentMethod.value === 'onsite') {
+            submitBtn.querySelector('#submitText').textContent = 'Demander un rendez-vous';
+            submitBtn.querySelector('i').className = 'fas fa-calendar-alt';
         } else {
-            submitBtn.querySelector('#submitText').textContent = 'Sélectionner un mode de paiement';
-            submitBtn.querySelector('i').className = 'fas fa-exclamation-triangle';
+            submitBtn.querySelector('#submitText').textContent = 'Demander un rendez-vous';
+            submitBtn.querySelector('i').className = 'fas fa-calendar-alt';
             submitBtn.disabled = true;
         }
     }

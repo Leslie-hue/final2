@@ -416,16 +416,10 @@
                         </div>
                         <div class="appointment-section">
                             <div class="appointment-header">
-                                <h3>Prendre un rendez-vous</h3>
-                                <p>Planifiez une consultation avec nos experts</p>
+                                <h3>Prendre un rendez-vous (Obligatoire)</h3>
+                                <p>Toute demande de contact nécessite la prise d'un rendez-vous</p>
                             </div>
-                            <div class="appointment-toggle">
-                                <span class="toggle-label">Demander un rendez-vous</span>
-                                <div class="toggle-switch" id="appointmentToggle">
-                                    <div class="toggle-slider"></div>
-                                </div>
-                                <input type="hidden" name="appointment_requested" id="appointmentRequested" value="0">
-                            </div>
+                            <input type="hidden" name="appointment_requested" id="appointmentRequested" value="1">
                             <div class="appointment-details" id="appointmentDetails" style="display: none;">
                                 <div class="appointment-grid">
                                     <div class="form-group">
@@ -468,32 +462,26 @@
                                             <div class="payment-label">Paiement sur place</div>
                                             <div class="payment-description">Payez lors de votre rendez-vous au cabinet.</div>
                                         </label>
+                                        <!-- Paiement en ligne désactivé
                                         <label class="payment-option">
                                             <input type="radio" id="paymentOnline" name="payment_method" value="online">
                                             <div class="payment-icon online"><i class="fas fa-credit-card" aria-hidden="true"></i></div>
                                             <div class="payment-label">Paiement en ligne</div>
                                             <div class="payment-description">Payez immédiatement via notre plateforme sécurisée.</div>
                                         </label>
+                                        -->
                                     </div>
                                     <div class="payment-note">
                                         <i class="fas fa-info-circle" aria-hidden="true"></i>
-                                        <p><strong>Important :</strong> Le paiement en ligne confirme immédiatement votre rendez-vous.</p>
+                                        <p><strong>Important :</strong> Le paiement s'effectue directement au cabinet lors de votre rendez-vous.</p>
                                     </div>
                                 </div>
-                                <div class="stripe-section" id="stripeSection" style="display: none;">
-                                    <div class="stripe-title">
-                                        <i class="fas fa-lock" aria-hidden="true"></i> Paiement sécurisé <span class="stripe-logo">STRIPE</span>
-                                    </div>
-                                    <div id="stripe-payment-element"></div>
-                                    <div style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #28a745;">
-                                        <small><i class="fas fa-shield-alt" aria-hidden="true"></i> Paiement sécurisé par Stripe avec chiffrement SSL.</small>
-                                    </div>
-                                </div>
+                                <!-- Section Stripe désactivée -->
                             </div>
                         </div>
                         <div class="text-center">
                             <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" aria-label="Envoyer la demande" disabled>
-                                <i class="fas fa-paper-plane" aria-hidden="true"></i> <span id="submitText">Envoyer la demande</span>
+                                <i class="fas fa-calendar-alt" aria-hidden="true"></i> <span id="submitText">Demander un rendez-vous</span>
                             </button>
                             <p style="color: var(--text-light); font-size: 0.9rem; margin-top: 1rem;">
                                 <i class="fas fa-shield-alt" aria-hidden="true"></i> Vos données sont protégées et confidentielles

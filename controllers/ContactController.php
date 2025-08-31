@@ -87,13 +87,14 @@ class ContactController {
             $email = filter_var(trim($_POST['email'] ?? ''), FILTER_VALIDATE_EMAIL);
             $phone = htmlspecialchars(trim($_POST['phone'] ?? ''));
             $message = htmlspecialchars(trim($_POST['message'] ?? ''));
-            $slot_id = filter_input(INPUT_POST, 'slot_id', FILTER_VALIDATE_INT) ?: null;
+            $slot_id = filter_input(INPUT_POST, 'slot_id', FILTER_VALIDATE_INT);
 
-            if (!$name || !$email || !$message) {
+            if (!$name || !$email || !$message || !$slot_id) {
                 $errors = [];
                 if (!$name) $errors[] = 'Nom requis';
                 if (!$email) $errors[] = 'Email invalide';
                 if (!$message) $errors[] = 'Message requis';
+                if (!$slot_id) $errors[] = 'Sélection d\'un créneau obligatoire';
                 error_log("Contact form validation failed: " . implode(', ', $errors));
                 http_response_code(400);
                 throw new Exception('Erreur : ' . implode(', ', $errors));
@@ -110,7 +111,19 @@ class ContactController {
 
             $appointment_id = null;
 
-            // 1. Insérer le contact en premier, sans l'ID du rendez-vous pour le moment.
+            // 1. Vérifier la disponibilité du créneau
+            $stmt = $this->db->prepare("
+                SELECT id FROM appointment_slots 
+                WHERE id = ? AND is_booked = 0 AND start_time > datetime('now')
+            ");
+            $stmt->execute([$slot_id]);
+            $slot = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$slot) {
+                throw new Exception('Créneau invalide ou non disponible.');
+            }
+
+            // 2. Insérer le contact en premier, sans l'ID du rendez-vous pour le moment.
             $stmt = $this->db->prepare("
                 INSERT INTO contacts (name, email, phone, message, status, created_at, updated_at)
                 VALUES (?, ?, ?, ?, 'new', datetime('now'), datetime('now'))
@@ -120,43 +133,29 @@ class ContactController {
             }
             $contact_id = $this->db->lastInsertId();
 
-            // 2. Si un créneau est sélectionné, créer le rendez-vous.
-            if ($slot_id) {
-                $stmt = $this->db->prepare("
-                    SELECT id FROM appointment_slots 
-                    WHERE id = ? AND is_booked = 0 AND start_time > datetime('now')
-                ");
-                $stmt->execute([$slot_id]);
-                $slot = $stmt->fetch(PDO::FETCH_ASSOC);
+            // 3. Créer le rendez-vous (obligatoire maintenant)
+            $stmt = $this->db->prepare("
+                INSERT INTO appointments (slot_id, contact_id, status, created_at, updated_at)
+                VALUES (?, ?, 'pending', datetime('now'), datetime('now'))
+            ");
+            if (!$stmt->execute([$slot_id, $contact_id])) {
+                throw new Exception('Échec de la création du rendez-vous.');
+            }
+            $appointment_id = $this->db->lastInsertId();
 
-                if (!$slot) {
-                    throw new Exception('Créneau invalide ou non disponible.');
-                }
-
-                // Créer le rendez-vous en le liant au contact nouvellement créé.
-                $stmt = $this->db->prepare("
-                    INSERT INTO appointments (slot_id, contact_id, status, created_at, updated_at)
-                    VALUES (?, ?, 'pending', datetime('now'), datetime('now'))
-                ");
-                if (!$stmt->execute([$slot_id, $contact_id])) {
-                    throw new Exception('Échec de la création du rendez-vous.');
-                }
-                $appointment_id = $this->db->lastInsertId();
-
-                // Mettre à jour le contact avec l'ID du nouveau rendez-vous.
-                $stmt = $this->db->prepare("UPDATE contacts SET appointment_id = ? WHERE id = ?");
-                if (!$stmt->execute([$appointment_id, $contact_id])) {
-                    throw new Exception('Échec de la liaison du rendez-vous au contact.');
-                }
-
-                // Marquer le créneau comme réservé.
-                $stmt = $this->db->prepare("UPDATE appointment_slots SET is_booked = 1, updated_at = datetime('now') WHERE id = ?");
-                if (!$stmt->execute([$slot_id])) {
-                    throw new Exception('Échec de la réservation du créneau.');
-                }
+            // Mettre à jour le contact avec l'ID du nouveau rendez-vous.
+            $stmt = $this->db->prepare("UPDATE contacts SET appointment_id = ? WHERE id = ?");
+            if (!$stmt->execute([$appointment_id, $contact_id])) {
+                throw new Exception('Échec de la liaison du rendez-vous au contact.');
             }
 
-            // 3. Enregistrer les fichiers joints liés au contact.
+            // Marquer le créneau comme réservé.
+            $stmt = $this->db->prepare("UPDATE appointment_slots SET is_booked = 1, updated_at = datetime('now') WHERE id = ?");
+            if (!$stmt->execute([$slot_id])) {
+                throw new Exception('Échec de la réservation du créneau.');
+            }
+
+            // 4. Enregistrer les fichiers joints liés au contact.
             if (!empty($file_result['files'])) {
                 $stmt = $this->db->prepare("
                     INSERT INTO contact_files (contact_id, file_path, uploaded_at)
@@ -172,13 +171,11 @@ class ContactController {
             // Si tout s'est bien passé, on valide la transaction.
             $this->db->commit();
 
-            if ($appointment_id) {
-                $_SESSION['new_appointment'] = true;
-            }
+            $_SESSION['new_appointment'] = true;
 
             error_log("Contact submitted successfully: contact_id=$contact_id, appointment_id=" . ($appointment_id ?: 'none'));
             http_response_code(200);
-            echo json_encode(['success' => true, 'message' => 'Votre message a été envoyé avec succès.']);
+            echo json_encode(['success' => true, 'message' => 'Votre demande de rendez-vous a été envoyée avec succès. Nous vous contacterons pour confirmer.']);
         } catch (Exception $e) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
