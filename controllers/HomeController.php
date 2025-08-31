@@ -207,7 +207,7 @@ class HomeController {
             $errors[] = "Format d'email invalide";
         }
 
-        $appointmentRequested = isset($_POST['appointment_requested']) && $_POST['appointment_requested'] === '1';
+        $appointmentRequested = true; // Toujours obligatoire maintenant
         if ($appointmentRequested) {
             if (empty($_POST['slot_id'])) {
                 $errors[] = "Sélection d'un créneau de rendez-vous requis";
@@ -256,9 +256,9 @@ class HomeController {
             'phone' => trim(filter_input(INPUT_POST, 'phone', FILTER_SANITIZE_FULL_SPECIAL_CHARS)),
             'subject' => trim(filter_input(INPUT_POST, 'subject', FILTER_SANITIZE_FULL_SPECIAL_CHARS)),
             'message' => trim(filter_input(INPUT_POST, 'message', FILTER_SANITIZE_FULL_SPECIAL_CHARS)),
-            'appointment_requested' => $appointmentRequested ? '1' : '0',
+            'appointment_requested' => '1', // Toujours 1 maintenant
             'payment_method' => trim(filter_input(INPUT_POST, 'payment_method', FILTER_SANITIZE_FULL_SPECIAL_CHARS)),
-            'slot_id' => $appointmentRequested ? filter_input(INPUT_POST, 'slot_id', FILTER_VALIDATE_INT) : null
+            'slot_id' => filter_input(INPUT_POST, 'slot_id', FILTER_VALIDATE_INT)
         ];
     }
 
@@ -288,7 +288,7 @@ class HomeController {
     }
 
     private function saveAppointment($contactId, $formData) {
-        if (!$formData['appointment_requested'] || !$formData['slot_id']) {
+        if (!$formData['slot_id']) {
             return null;
         }
 
@@ -300,7 +300,7 @@ class HomeController {
             if (!$this->db->inTransaction()) {
                 $this->db->beginTransaction();
             }
-            $status = $formData['payment_method'] === 'online' ? 'confirmed' : 'pending';
+            $status = 'pending'; // Toujours en attente car paiement sur place uniquement
             $sql = "INSERT INTO appointments (contact_id, slot_id, status, created_at, updated_at) 
                     VALUES (:contact_id, :slot_id, :status, datetime('now'), datetime('now'))";
             $stmt = $this->db->prepare($sql);
@@ -928,7 +928,7 @@ class HomeController {
             [
                 'id' => 3,
                 'title' => 'Nouveau Partenariat Stratégique',
-                'content' => 'Notre cabinet s’associe à un leader en conseil fiscal pour offrir des services intégrés.',
+                'content' => 'Notre cabinet s'associe à un leader en conseil fiscal pour offrir des services intégrés.',
                 'image_path' => '/public/uploads/news/default_news.jpg',
                 'publish_date' => date('Y-m-d H:i:s', strtotime('-2 weeks')),
                 'is_active' => 1
